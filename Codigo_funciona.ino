@@ -29,6 +29,7 @@ volatile int freq = 0; //Interrupcion para RPM
 unsigned long time1, time2 = 0;  // Ventana de tiempo RPM 
 float measurement_i = 0;
 uint16_t measurement_vel = 0; /////// Esto lo cambieeeeeeeeee
+uint8_t measurement_duty = 0;
 float measurement_temp = 0;
 uint32_t actual_vel,actual_vel_freq, avg_vel = 0; //// Esto lo cambieeeeeeeee
 int count = 0;
@@ -135,27 +136,33 @@ void loop() {
   }
 
   if(red_flag){
-    Serial.print(" Corriente: ");
-    Serial.print(measurement_i);
-    Serial.print(" A, ");
-    Serial.print("RPM: ");
-    Serial.print(measurement_vel);
-    Serial.print(" rpm, ");
-    Serial.print("Empuje: ");
-    Serial.print(measurement_celda);
-    Serial.print(" N, ");
-    Serial.print("Temperatura: ");
-    Serial.print(measurement_temp, 3);
-    Serial.print("°C, ");
-    Serial.print("Duty: ");
-    Serial.print(duty);
-    Serial.println(" %");
+    if(verb){
+      //Serial.print(" Corriente: ");
+      Serial.print(measurement_i);
+      Serial.print(", ");
+      //Serial.print("RPM: ");
+      Serial.print(measurement_vel);
+      Serial.print(", ");
+      //Serial.print("Empuje: ");
+      Serial.print(measurement_celda);
+      Serial.print(", ");
+      //Serial.print("Temperatura: ");
+      Serial.print(measurement_temp, 3);
+      Serial.print(", ");
+      //Serial.print("Duty: ");
+      
+      Serial.println(duty);
+      //Serial.println(" %");
+      //red_flag = false;
+
+    }
+    else{
+        save_data_MEM(measurement_i, measurement_vel, measurement_celda,measurement_temp, duty);
+    }
     red_flag = false;
 
   }
- // cli();
-  save_data_MEM(measurement_i, measurement_vel, measurement_celda,measurement_temp, duty);
-  //sei();
+
   
 
   time2 = millis();
@@ -378,7 +385,7 @@ void loop() {
 }
 float sense_celda(){
   hx711.update();
-  celda = abs(hx711.getUnits(10)-0.304)*(9.8);  //-0.306
+  celda = abs(hx711.getUnits(10)-0.308)*(9.8);  //-0.306
   return celda;
 }
 float sense_temperature(){
@@ -400,11 +407,13 @@ void update_measurement(){
       measurement_temp = avg_temp/n_samples;
       //measurement_vel = measurement_vel*2*3.1416*0.01/60;
       measurement_celda = avg_celda / n_samples;
-      if(verb){
-        red_flag = true;        
-      }
+      //measurement_duty = duty;
+      
+      red_flag = true;        
+      
 
       avg_current = 0;
+      //duty = 0;
       avg_vel = 0;
       avg_temp = 0;
       avg_celda = 0;
@@ -470,21 +479,20 @@ bool valor(String str) {
 void save_data_MEM(float corriente, uint16_t rpm, float celda, float temperatura, uint8_t pwm){
 
   EEPROM.put(x_, corriente);
-  //Serial.println(EEPROM.get(x_, resultado),3);
   EEPROM.put(y_, rpm);
-  EEPROM.put(w_, temperatura);
   EEPROM.put(z_, celda);
+  EEPROM.put(w_, temperatura);
   EEPROM.put(p_, pwm);
   x_ += 15; //1020
   y_ += 15;
-  w_ += 15;
   z_ += 15;
+  w_ += 15;
   p_ += 15;
   if(x_ == 1020){
     x_=0; //corriente(4)
     y_=4; //rpm(2)
-    w_=6;  //empuje (4)
-    z_ = 10; //temperatura (4)
+    z_=6;  //empuje (4)
+    w_ = 10; //temperatura (4)
     p_ = 14; //duty (1)
   }
 
@@ -498,22 +506,22 @@ void extract_data_MEM(){
   Serial.print(", ");
   Serial.print(EEPROM.get(y_, measurement_vel));
   Serial.print(", ");
-  Serial.print(EEPROM.get(w_, measurement_celda));
+  Serial.print(EEPROM.get(z_, measurement_celda));
   Serial.print(", ");
-  Serial.print(EEPROM.get(z_, measurement_temp));
+  Serial.print(EEPROM.get(w_, measurement_temp));
   Serial.print(", ");
   Serial.println(EEPROM.get(p_, duty));
   x_ += 15; //1020
   y_ += 15;
-  w_ += 15;
   z_ += 15;
+  w_ += 15;
   p_ += 15;
   if(x_ == 1020){
     u = 1020;
     x_=0; //corriente(4)
     y_=4; //rpm(2)
-    w_=6;  //empuje (4)
-    z_ = 10; //temperatura (4)
+    z_=6;  //empuje (4)
+    w_ = 10; //temperatura (4)
     p_ = 14; //duty (1)
   }
 }
