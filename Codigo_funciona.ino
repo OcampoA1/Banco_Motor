@@ -3,8 +3,16 @@
 #include <Bounce2.h>
 #include <NBHX711.h>
 #define pinMotor 5
+// Variables para guardar en la memoria
+int u=0;
+int x_=0; //corriente(4)
+int y_=4; //rpm(2)
+int w_=6;  //empuje (4)
+int z_ = 10; //temperatura (4)
+int p_ = 14; //duty (1)
+
 //variables consola
-int duty=0;
+uint8_t duty=0;
 int direccion = 0;
 uint8_t percentage = 10; //< Porcentaje de la estimulación
 uint32_t periodo = 500; //< Valor del periodo, por defecto 500ms 
@@ -20,9 +28,9 @@ uint32_t n_preescaler = (16000000)/256; // desde 1Hz - 62.5kHz
 volatile int freq = 0; //Interrupcion para RPM 
 unsigned long time1, time2 = 0;  // Ventana de tiempo RPM 
 float measurement_i = 0;
-float measurement_vel = 0;
+uint16_t measurement_vel = 0; /////// Esto lo cambieeeeeeeeee
 float measurement_temp = 0;
-uint32_t actual_vel,actual_vel_freq, avg_vel = 0;
+uint32_t actual_vel,actual_vel_freq, avg_vel = 0; //// Esto lo cambieeeeeeeee
 int count = 0;
 float actual_current, avg_current = 0;
 float sens_current = 0.185;
@@ -125,27 +133,29 @@ void loop() {
     interrupts();     
   }
 
-  if(verb){
-    Serial.print(" RPM: ");
-    Serial.print(measurement_vel);
-    Serial.print(" rpm, ");
-    Serial.print("Corriente: ");
+  if(red_flag){
+    Serial.print(" Corriente: ");
     Serial.print(measurement_i);
     Serial.print(" A, ");
+    Serial.print("RPM: ");
+    Serial.print(measurement_vel);
+    Serial.print(" rpm, ");
+    Serial.print("Empuje: ");
+    Serial.print(measurement_celda);
+    Serial.print(" N, ");
     Serial.print("Temperatura: ");
-    Serial.print(measurement_temp);
-    Serial.print(" °C, ");
-    Serial.print("Fuerza: ");
-    Serial.print(measurement_celda, 3);
-    Serial.print("N, ");
+    Serial.print(measurement_temp, 3);
+    Serial.print("°C, ");
     Serial.print("Duty: ");
     Serial.print(duty);
     Serial.println(" %");
+    red_flag = false;
 
   }
-  else{
-    save_data_MEM(measurement_i, measurement_vel, measurement_temp,measurement_celda, duty);
-  }
+ // cli();
+  save_data_MEM(measurement_i, measurement_vel, measurement_celda,measurement_temp, duty);
+  //sei();
+  
 
   time2 = millis();
   if(time2 > (time1 + 1000)){
@@ -319,7 +329,7 @@ void loop() {
       Serial.println(periodo);
       Serial.print(">> ");
       Serial.print("FRECUENCY: ");
-      Serial.println(1000000/periodo);
+      Serial.println(Fs);
       Serial.print(">> ");
       Serial.print("AVERAGE: ");
       Serial.println(n_samples);
@@ -337,6 +347,8 @@ void loop() {
       Serial.println("--------------------");
     }
     else if(comando == "FDATA"){
+      u=0;
+      Serial.println("DONE ");
       noInterrupts();
       extract_data_MEM();
       interrupts();
@@ -365,7 +377,7 @@ void loop() {
 }
 float sense_celda(){
   hx711.update();
-  celda = abs(hx711.getUnits(10)-0.306)*(9.8);
+  celda = abs(hx711.getUnits(10)-0.304)*(9.8);  //-0.306
   return celda;
 }
 float sense_temperature(){
@@ -387,7 +399,9 @@ void update_measurement(){
       measurement_temp = avg_temp/n_samples;
       //measurement_vel = measurement_vel*2*3.1416*0.01/60;
       measurement_celda = avg_celda / n_samples;
-      save_data_MEM(measurement_i, measurement_vel, measurement_temp,measurement_celda, duty);
+      if(verb){
+        red_flag = true;        
+      }
 
       avg_current = 0;
       avg_vel = 0;
@@ -452,23 +466,57 @@ bool valor(String str) {
   }
   return hasLetters; // Retorna el bool 
 }
-void save_data_MEM(float corriente, float rpm, float temperatura, float celda, int pwm){
-  EEPROM.put(direccion, corriente);
-  direccion += 4;
-  EEPROM.put(direccion, rpm);
-  direccion += 4;
-  EEPROM.put(direccion, temperatura);
-  direccion += 4;
-  EEPROM.put(direccion, celda);
-  direccion +=4;
-  EEPROM.put(direccion, pwm);
-  
+void save_data_MEM(float corriente, uint16_t rpm, float celda, float temperatura, uint8_t pwm){
+
+  EEPROM.put(x_, corriente);
+  //Serial.println(EEPROM.get(x_, resultado),3);
+  EEPROM.put(y_, rpm);
+  EEPROM.put(w_, temperatura);
+  EEPROM.put(z_, celda);
+  EEPROM.put(p_, pwm);
+  x_ += 15; //1020
+  y_ += 15;
+  w_ += 15;
+  z_ += 15;
+  p_ += 15;
+  if(x_ == 1020){
+    x_=0; //corriente(4)
+    y_=4; //rpm(2)
+    w_=6;  //empuje (4)
+    z_ = 10; //temperatura (4)
+    p_ = 14; //duty (1)
+  }
+
+ 
 }
 
 void extract_data_MEM(){
-  for (int i = 0; i < EEPROM.length(); i+= 4){  //(apuntador)*4
-    Serial.print("Position: ");
-    Serial.println(i);
-    Serial.println(EEPROM.get(i, resultado),3);
+  while(u<1020){
+  u +=1;
+  Serial.print(u);
+  Serial.print(", ");
+  Serial.print(EEPROM.get(x_, measurement_i));
+  Serial.print(", ");
+  Serial.print(EEPROM.get(y_, measurement_vel));
+  Serial.print(", ");
+  Serial.print(EEPROM.get(w_, measurement_celda));
+  Serial.print(", ");
+  Serial.print(EEPROM.get(z_, measurement_temp));
+  Serial.print(", ");
+  Serial.println(EEPROM.get(p_, duty));
+  x_ += 15; //1020
+  y_ += 15;
+  w_ += 15;
+  z_ += 15;
+  p_ += 15;
+  if(x_ == 1020){
+    u = 1020;
+    x_=0; //corriente(4)
+    y_=4; //rpm(2)
+    w_=6;  //empuje (4)
+    z_ = 10; //temperatura (4)
+    p_ = 14; //duty (1)
   }
+}
+
 }
