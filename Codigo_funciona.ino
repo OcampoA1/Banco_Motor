@@ -1,8 +1,10 @@
 #include <string.h>
 #include <EEPROM.h>
-#include "HX711.h"
+#include <Bounce2.h>
+#include <NBHX711.h>
 #define pinMotor 5
 //variables consola
+int duty=0;
 int direccion = 0;
 uint8_t percentage = 10; //< Porcentaje de la estimulación
 uint32_t periodo = 500; //< Valor del periodo, por defecto 500ms 
@@ -28,7 +30,7 @@ uint32_t offset_i = 0;
 // Temperature sensor var
 float actual_temp, avg_temp = 0;
 float offset_temp = 0;
-
+float celda = 0;
 float measurement_celda = 0;
 float avg_celda = 0;
 float actual_celda = 0;
@@ -49,12 +51,17 @@ int b;
 bool rising;
 bool enabled_sig = false; ///< Dice si el sistema esta activo o no
 
+// celda de carga 
+static bool firstTime = true;
+static byte initialCount = 0;
 
-
-//HX711 balanza; //< Objeto para la balanza
+NBHX711 hx711(A3,A2, 20);
 
 void setup() {
-  
+
+  hx711.begin();
+  hx711.setScale(439430.25);
+  hx711.tare(20);
   pinMode(pinMotor, OUTPUT); //< Pin para el motor
   pinMode(A0, INPUT); //< A0 sensado de corriente
   pinMode(A4, INPUT); //< A4 sensado de temperatura
@@ -98,6 +105,7 @@ void loop() {
       //Serial.println(y);
       y = constrain(y,0,Vmax);
       y = map(int(y*100),0,Vmax*100,0,255); // se convierte float de 0.01 a 5 como entero de 1 a 500
+      duty = (y/255)*100;
       analogWrite(pinMotor,int(y)); // CORREGIR -1 Y >255
 
       if(acum >= T/2 && rising == true){
@@ -118,22 +126,25 @@ void loop() {
   }
 
   if(verb){
-    Serial.print(" V: ");
+    Serial.print(" RPM: ");
     Serial.print(measurement_vel);
-    Serial.print(" m/s |");
-    Serial.print("I: ");
+    Serial.print(" rpm, ");
+    Serial.print("Corriente: ");
     Serial.print(measurement_i);
-    Serial.print(" A | ");
-    Serial.print("T: ");
+    Serial.print(" A, ");
+    Serial.print("Temperatura: ");
     Serial.print(measurement_temp);
-    Serial.print(" C |");
-    Serial.println("F: ");
-    //Serial.print(measurement_celda);
-    //Serial.println("N ");
+    Serial.print(" °C, ");
+    Serial.print("Fuerza: ");
+    Serial.print(measurement_celda, 3);
+    Serial.print("N, ");
+    Serial.print("Duty: ");
+    Serial.print(duty);
+    Serial.println(" %");
 
   }
   else{
-    save_data_MEM(measurement_i, measurement_vel, measurement_temp);
+    save_data_MEM(measurement_i, measurement_vel, measurement_temp,measurement_celda, duty);
   }
 
   time2 = millis();
@@ -352,10 +363,11 @@ void loop() {
   }
 
 }
-//float sense_celda(){
-//  float mono = balanza.get_units(20)*(-10);
-//  return mono;
-//}
+float sense_celda(){
+  hx711.update();
+  celda = abs(hx711.getUnits(10)-0.306)*(9.8);
+  return celda;
+}
 float sense_temperature(){
   float voltage = analogRead(A4) * (5.0 / 1023.0);
   float temp = offset_temp + voltage * 100;
@@ -374,7 +386,8 @@ void update_measurement(){
       measurement_vel = avg_vel/n_samples;
       measurement_temp = avg_temp/n_samples;
       //measurement_vel = measurement_vel*2*3.1416*0.01/60;
-     // measurement_celda = avg_celda / n_samples;
+      measurement_celda = avg_celda / n_samples;
+      save_data_MEM(measurement_i, measurement_vel, measurement_temp,measurement_celda, duty);
 
       avg_current = 0;
       avg_vel = 0;
@@ -390,9 +403,9 @@ void update_measurement(){
     actual_vel = actual_vel_freq;    
     actual_temp = sense_temperature();
     //delayMicroseconds(104);
-    //actual_celda = sense_celda();
+    actual_celda = sense_celda();
     // update average
-    //avg_celda += actual_celda;
+    avg_celda += actual_celda;
     avg_current += actual_current;   
     avg_vel += actual_vel;
     avg_temp += actual_temp;
@@ -439,14 +452,17 @@ bool valor(String str) {
   }
   return hasLetters; // Retorna el bool 
 }
-void save_data_MEM(float corriente, float rpm,float temperatura){
+void save_data_MEM(float corriente, float rpm, float temperatura, float celda, int pwm){
   EEPROM.put(direccion, corriente);
   direccion += 4;
   EEPROM.put(direccion, rpm);
-  //Serial.println(EEPROM.get(eeAddress, resultado),3);
   direccion += 4;
   EEPROM.put(direccion, temperatura);
   direccion += 4;
+  EEPROM.put(direccion, celda);
+  direccion +=4;
+  EEPROM.put(direccion, pwm);
+  
 }
 
 void extract_data_MEM(){
