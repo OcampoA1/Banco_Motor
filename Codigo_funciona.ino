@@ -64,9 +64,10 @@ static bool firstTime = true;
 static byte initialCount = 0;
 
 NBHX711 hx711(A3,A2, 20);
-
+void modeInit(int MODE);
 void setup() {
 
+  modeInit(MODE);
   hx711.begin();
   hx711.setScale(439430.25);
   hx711.tare(20);
@@ -492,9 +493,7 @@ void save_data_MEM(float corriente, uint16_t rpm, float celda, float temperatura
 
 void extract_data_MEM(){
   while(u<1020){
-  u +=1;
-  Serial.print(u);
-  Serial.print(", ");
+
   Serial.print(EEPROM.get(x_, measurement_i));
   Serial.print(", ");
   Serial.print(EEPROM.get(y_, measurement_vel));
